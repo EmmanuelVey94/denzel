@@ -8,6 +8,8 @@ const DATABASE_NAME = "denzel";
 const DENZEL_IMDB_ID = 'nm0000243';
 var app = Express();
 
+
+app.use()
 app.use(BodyParser.json());
 app.use(BodyParser.urlencoded({ extended: true }));
 
@@ -24,6 +26,10 @@ app.listen(9292, () => {
     });
 });
 
+
+
+
+
 app.get("/movies/populate", async (request, response) => {
     const movies = await imdb(DENZEL_IMDB_ID);
     collection.insert(movies, (error, result) => {
@@ -33,7 +39,16 @@ app.get("/movies/populate", async (request, response) => {
         response.send(result.result);
     });
 });
-
+app.post("/movies/:id", (request, response) => {
+    var review = response.body.review;
+    var date = response.body.date;
+    collection.aggregate([{$match:{"id": request.params.id}},{$set:{review:review,date:date}}], (error, result) => {
+        if(error) {
+            return response.status(500).send(error);
+        }
+        response.send(result.result);
+    });
+});
 app.get("/movies", async (request, response) => {
 
     collection.find({metascore:{$gte:70}}).toArray((error, result) => {
@@ -42,6 +57,19 @@ app.get("/movies", async (request, response) => {
         }
         const index = Math.floor(Math.random() * Math.floor(result.length));
         result = result[index];
+        response.send(result);
+    });
+});
+app.get("/movies/search", (request, response) => {
+    const targetMetascore = +request.query.metascore ;
+    const targetLimit = +request.query.limit;
+
+    collection.find({
+      metascore:{$gte:targetMetascore}
+    }).limit(targetLimit).sort({metascore:-1}).toArray((error, result) => {
+        if(error) {
+            return response.status(500).send(error);
+        }
         response.send(result);
     });
 });
