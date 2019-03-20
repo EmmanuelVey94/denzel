@@ -6,10 +6,10 @@ const imdb = require('./src/imdb');
 const CONNECTION_URL = "mongodb+srv://Emmanuel:Jesuismoi1@cluster0-nk4cf.mongodb.net/test?retryWrites=true";
 const DATABASE_NAME = "denzel";
 const DENZEL_IMDB_ID = 'nm0000243';
+
+
 var app = Express();
 
-
-app.use()
 app.use(BodyParser.json());
 app.use(BodyParser.urlencoded({ extended: true }));
 
@@ -25,7 +25,6 @@ app.listen(9292, () => {
         console.log("Connected to `" + DATABASE_NAME + "`!");
     });
 });
-
 
 
 
@@ -82,3 +81,119 @@ app.get("/movies/:id", (request, response) => {
         response.send(result);
     });
 });
+
+
+//----------------------------GraphQL-------------------------------------------//
+
+
+const { GraphQLObjectType,
+    GraphQLString,
+    GraphQLInt,
+    GraphQLList,
+    GraphQLFloat,
+    GraphQLBoolean
+} = require('graphql');
+
+const fetch = require('node-fetch')
+
+const movieType = new GraphQLObjectType({
+  name: 'movie',
+  fields : {
+    id: { type: GraphQLString },
+    link: { type: GraphQLString },
+    metascore: { type: GraphQLInt },
+    poster: { type: GraphQLString },
+    rating: { type: GraphQLFloat },
+    synopsis: { type: GraphQLString },
+    title: { type: GraphQLString },
+    votes: { type: GraphQLFloat},
+    year: { type: GraphQLInt },
+    date:{type: GraphQLString},
+    review:{type:GraphQLString}
+  }
+});
+const queryType = new GraphQLObjectType({
+  name: 'Query',
+  fields: {
+
+    populate:{
+      type: GraphQLInt,
+      resolve: function() {
+        return fetch('http://localhost:9292/movies/populate')
+        .then(res => res.json())
+        .then(json => json.total)
+      }
+    },
+
+    randomMovie: {
+      type: movieType,
+      resolve: async function() {
+
+        const res = await collection.find({metascore:{$gte:70}}).toArray();
+        var random = Math.floor(Math.random() * Math.floor(res.length));
+        return res[random];
+
+      }
+    },
+
+    specMovie: {
+      type: movieType,
+      args: {
+        id: { type: GraphQLString },
+      },
+      resolve: async function(source,args) {
+        return fetch(`http://localhost:9292/movies/${args.id}`)
+        .then(res => res.json())
+      }
+    },
+
+    searchMovie: {
+      type: GraphQLList(movieType),
+      args: {
+        limit: { type: GraphQLInt },
+        metascore: {type: GraphQLInt}
+      },
+      resolve: async function(source,args) {
+        const res = await fetch(`http://localhost:9292/movies/search?limit=${args.limit}&metascore=${args.metascore}`)
+        const finalResult = await res.json();
+        return finalResult.results;
+      }
+    },
+
+    saveData: {
+      type: GraphQLString,
+      args: {
+        id: { type: GraphQLString },
+        date: {type: GraphQLString},
+        review: {type: GraphQLString}
+      },
+      resolve : async function(source,args){
+        collection.updateOne({ "id": args.id },{$set : {"date": args.date , "review": args.review}}, (error, result) => {
+              if(error) {
+                  return response.status(500).send(error);
+              }
+          });
+          return `updateOK for ${args.id}`;
+
+        }
+    }
+
+
+  }
+});
+//const {queryType} = require('./query.js');
+const express = require('express');
+const graphqlHTTP = require('express-graphql');
+const {GraphQLSchema} = require('graphql');
+const schema = new GraphQLSchema({ query : queryType });
+
+//Setup the nodejs GraphQL server
+app.use('/graphql', graphqlHTTP({
+    schema: schema,
+    graphiql: true,
+}));
+
+
+
+
+//Define the Query
